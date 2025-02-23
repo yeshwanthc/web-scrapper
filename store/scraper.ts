@@ -4,10 +4,20 @@ import { createClient } from '@supabase/supabase-js';
 import type { ScrapedData, Stats, TimeFrame, SeoAnalysis } from '@/lib/types';
 import { ScrapedDataSchema } from '@/lib/types';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+// Initialize Supabase client only if environment variables are available
+const getSupabaseClient = () => {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
+    console.warn('Supabase environment variables are not set');
+    return null;
+  }
+
+  return createClient(supabaseUrl, supabaseKey);
+};
+
+const supabase = getSupabaseClient();
 
 interface ScraperState {
   url: string;
@@ -51,7 +61,7 @@ const calculateSEOScore = (data: ScrapedData): SeoAnalysis => {
   }
 
   // Description analysis
-  if (data.description.length >= 120 && data.description.length <= 160) {
+  if (data.description?.length >= 120 && data.description?.length <= 160) {
     checks.description.score = 100;
     checks.description.message = 'Description length is optimal';
   } else {
@@ -75,7 +85,10 @@ const calculateSEOScore = (data: ScrapedData): SeoAnalysis => {
 
   // Images analysis
   const imagesWithAlt = data.content.images.filter(img => img.alt).length;
-  const imageScore = (imagesWithAlt / data.content.images.length) * 100 || 100;
+  const imageScore = data.content.images.length > 0 
+    ? (imagesWithAlt / data.content.images.length) * 100 
+    : 100;
+  
   checks.images.score = imageScore;
   checks.images.message = imageScore === 100 
     ? 'All images have alt text' 
@@ -157,6 +170,11 @@ export const useScraperStore = create<ScraperState & ScraperActions>()(
     },
 
     loadSavedPages: async () => {
+      if (!supabase) {
+        set({ error: 'Supabase is not configured' });
+        return;
+      }
+
       try {
         const { data, error } = await supabase
           .from('scraped_pages')
@@ -199,7 +217,7 @@ export const useScraperStore = create<ScraperState & ScraperActions>()(
       // Calculate content density for different sections
       const sections = ['header', 'main', 'footer'];
       const contentDensity = sections.map(section => {
-        const sectionText = data.content.text.length;
+        const sectionText = data.content.fullText.length;
         const sectionElements = data.content.links.length + data.content.images.length;
         return {
           section,
