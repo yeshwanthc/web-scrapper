@@ -35,12 +35,20 @@ export const TableSchema = z.object({
   rows: z.array(z.array(z.string())),
 });
 
-export const SectionSchema = z.object({
-  type: z.string(),
+export const ParagraphSchema = z.object({
   text: z.string(),
-  html: z.string().optional(),
+  html: z.string(),
   classes: z.string().optional(),
   id: z.string().optional(),
+});
+
+export const VideoSchema = z.object({
+  type: z.string(),
+  src: z.string(),
+  title: z.string(),
+  width: z.string().optional(),
+  height: z.string().optional(),
+  html: z.string(),
 });
 
 export const MetaSchema = z.object({
@@ -56,32 +64,17 @@ export const MetaSchema = z.object({
   other: z.record(z.string()).optional(),
 });
 
-export const ScriptSchema = z.object({
-  src: z.string().optional(),
-  type: z.string().optional(),
-  async: z.boolean(),
-  defer: z.boolean(),
-  content: z.string().optional(),
-});
-
-export const StyleSchema = z.object({
-  type: z.enum(['external', 'inline']),
-  href: z.string().optional(),
-  content: z.string().optional(),
-});
-
 export const ContentSchema = z.object({
   fullText: z.string(),
   html: z.string(),
   meta: MetaSchema,
-  sections: z.array(SectionSchema),
-  links: z.array(LinkSchema),
+  paragraphs: z.array(ParagraphSchema),
   images: z.array(ImageSchema),
+  links: z.array(LinkSchema),
   headings: z.array(HeadingSchema),
   lists: z.array(ListSchema),
   tables: z.array(TableSchema),
-  scripts: z.array(ScriptSchema),
-  styles: z.array(StyleSchema),
+  videos: z.array(VideoSchema),
   readingTime: z.number(),
   wordCount: z.number(),
   sentiment: z.object({
@@ -109,10 +102,9 @@ export type Link = z.infer<typeof LinkSchema>;
 export type Heading = z.infer<typeof HeadingSchema>;
 export type List = z.infer<typeof ListSchema>;
 export type Table = z.infer<typeof TableSchema>;
-export type Section = z.infer<typeof SectionSchema>;
+export type Paragraph = z.infer<typeof ParagraphSchema>;
+export type Video = z.infer<typeof VideoSchema>;
 export type Meta = z.infer<typeof MetaSchema>;
-export type Script = z.infer<typeof ScriptSchema>;
-export type Style = z.infer<typeof StyleSchema>;
 export type Content = z.infer<typeof ContentSchema>;
 export type ScrapedData = z.infer<typeof ScrapedDataSchema>;
 

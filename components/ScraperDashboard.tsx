@@ -147,13 +147,11 @@ export default function ScraperDashboard() {
                     <div>
                       <h3 className="font-semibold mb-3">Paragraphs</h3>
                       <div className="space-y-4">
-                        {scrapedData.content.sections
-                          .filter(section => section.type === 'p')
-                          .map((section, i) => (
-                            <div key={i} className="p-4 bg-secondary/50 rounded-lg">
-                              <p>{section.text}</p>
-                            </div>
-                          ))}
+                        {scrapedData.content.paragraphs.map((paragraph, i) => (
+                          <div key={i} className="p-4 bg-secondary/50 rounded-lg">
+                            <p>{paragraph.text}</p>
+                          </div>
+                        ))}
                       </div>
                     </div>
 
@@ -246,26 +244,11 @@ export default function ScraperDashboard() {
                     <div>
                       <h3 className="font-semibold mb-3">Videos</h3>
                       <div className="grid gap-4">
-                        {scrapedData.content.sections
-                          .filter(section => section.type === 'video' || section.html?.includes('<video'))
-                          .map((video, i) => (
-                            <div key={i} className="relative rounded-lg overflow-hidden">
-                              <div dangerouslySetInnerHTML={{ __html: video.html }} />
-                            </div>
-                          ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <h3 className="font-semibold mb-3">iframes (Embedded Content)</h3>
-                      <div className="grid gap-4">
-                        {scrapedData.content.sections
-                          .filter(section => section.type === 'iframe')
-                          .map((iframe, i) => (
-                            <div key={i} className="relative rounded-lg overflow-hidden bg-secondary/50 p-4">
-                              <div dangerouslySetInnerHTML={{ __html: iframe.html }} />
-                            </div>
-                          ))}
+                        {scrapedData.content.videos.map((video, i) => (
+                          <div key={i} className="relative rounded-lg overflow-hidden">
+                            <div dangerouslySetInnerHTML={{ __html: video.html }} />
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
