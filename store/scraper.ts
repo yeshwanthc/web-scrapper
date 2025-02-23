@@ -1,0 +1,240 @@
+import { create } from 'zustand';
+import { immer } from 'zustand/middleware/immer';
+import { createClient } from '@supabase/supabase-js';
+import type { ScrapedData, Stats, TimeFrame, SeoAnalysis } from '@/lib/types';
+import { ScrapedDataSchema } from '@/lib/types';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+interface ScraperState {
+  url: string;
+  loading: boolean;
+  error: string | null;
+  scrapedData: ScrapedData | null;
+  savedPages: ScrapedData[];
+  stats: Stats | null;
+  seoAnalysis: SeoAnalysis | null;
+  searchTerm: string;
+  selectedTimeframe: TimeFrame;
+}
+
+interface ScraperActions {
+  setUrl: (url: string) => void;
+  scrapeUrl: () => Promise<void>;
+  loadSavedPages: () => Promise<void>;
+  setSearchTerm: (term: string) => void;
+  setTimeframe: (timeframe: TimeFrame) => void;
+  calculateStats: (data: ScrapedData) => void;
+  analyzeSEO: (data: ScrapedData) => void;
+}
+
+const calculateSEOScore = (data: ScrapedData): SeoAnalysis => {
+  const checks = {
+    title: { score: 0, message: '' },
+    description: { score: 0, message: '' },
+    headings: { score: 0, message: '' },
+    images: { score: 0, message: '' },
+    links: { score: 0, message: '' },
+    meta: { score: 0, message: '' },
+  };
+
+  // Title analysis
+  if (data.title.length >= 30 && data.title.length <= 60) {
+    checks.title.score = 100;
+    checks.title.message = 'Title length is optimal';
+  } else {
+    checks.title.score = 50;
+    checks.title.message = 'Title length should be between 30-60 characters';
+  }
+
+  // Description analysis
+  if (data.description.length >= 120 && data.description.length <= 160) {
+    checks.description.score = 100;
+    checks.description.message = 'Description length is optimal';
+  } else {
+    checks.description.score = 50;
+    checks.description.message = 'Description length should be between 120-160 characters';
+  }
+
+  // Headings analysis
+  const hasH1 = data.content.headings.some(h => h.level === 1);
+  const headingsHierarchy = data.content.headings.every((h, i, arr) => 
+    i === 0 || h.level >= arr[i-1].level
+  );
+  
+  if (hasH1 && headingsHierarchy) {
+    checks.headings.score = 100;
+    checks.headings.message = 'Heading structure is optimal';
+  } else {
+    checks.headings.score = 60;
+    checks.headings.message = 'Improve heading hierarchy';
+  }
+
+  // Images analysis
+  const imagesWithAlt = data.content.images.filter(img => img.alt).length;
+  const imageScore = (imagesWithAlt / data.content.images.length) * 100 || 100;
+  checks.images.score = imageScore;
+  checks.images.message = imageScore === 100 
+    ? 'All images have alt text' 
+    : 'Some images missing alt text';
+
+  // Links analysis
+  const internalLinks = data.content.links.filter(l => !l.isExternal).length;
+  const externalLinks = data.content.links.filter(l => l.isExternal).length;
+  
+  if (internalLinks > 0 && externalLinks > 0) {
+    checks.links.score = 100;
+    checks.links.message = 'Good mix of internal and external links';
+  } else {
+    checks.links.score = 70;
+    checks.links.message = 'Consider adding more diverse links';
+  }
+
+  // Meta tags analysis
+  const hasMeta = data.content.meta && Object.keys(data.content.meta).length > 0;
+  if (hasMeta) {
+    checks.meta.score = 100;
+    checks.meta.message = 'Meta tags are well-defined';
+  } else {
+    checks.meta.score = 50;
+    checks.meta.message = 'Add more meta tags';
+  }
+
+  const totalScore = Object.values(checks).reduce((acc, check) => acc + check.score, 0) / 6;
+
+  return {
+    score: Math.round(totalScore),
+    checks,
+  };
+};
+
+export const useScraperStore = create<ScraperState & ScraperActions>()(
+  immer((set, get) => ({
+    url: '',
+    loading: false,
+    error: null,
+    scrapedData: null,
+    savedPages: [],
+    stats: null,
+    seoAnalysis: null,
+    searchTerm: '',
+    selectedTimeframe: 'all',
+
+    setUrl: (url) => set({ url }),
+
+    scrapeUrl: async () => {
+      try {
+        set({ loading: true, error: null });
+        const response = await fetch('/api/scrape', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: get().url }),
+        });
+
+        const result = await response.json();
+        
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to scrape website');
+        }
+
+        const validatedData = ScrapedDataSchema.parse(result.data);
+        set((state) => {
+          state.scrapedData = validatedData;
+          state.error = null;
+        });
+        
+        get().calculateStats(validatedData);
+        get().analyzeSEO(validatedData);
+        await get().loadSavedPages();
+      } catch (error) {
+        set({ error: error instanceof Error ? error.message : 'An error occurred' });
+      } finally {
+        set({ loading: false });
+      }
+    },
+
+    loadSavedPages: async () => {
+      try {
+        const { data, error } = await supabase
+          .from('scraped_pages')
+          .select('*')
+          .order('scraped_at', { ascending: false });
+
+        if (error) throw error;
+        
+        set({ savedPages: data || [] });
+      } catch (error) {
+        set({ error: 'Failed to load saved pages' });
+      }
+    },
+
+    setSearchTerm: (term) => set({ searchTerm: term }),
+
+    setTimeframe: (timeframe) => set({ selectedTimeframe: timeframe }),
+
+    calculateStats: (data) => {
+      if (!data) return;
+
+      const linkTypes = Object.entries(
+        data.content.links.reduce((acc, link) => {
+          const type = link.type || 'other';
+          acc[type] = (acc[type] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>)
+      ).map(([type, count]) => ({ type, count }));
+
+      const headingsByLevel = data.content.headings.reduce((acc, h) => {
+        acc[`h${h.level}`] = (acc[`h${h.level}`] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+      const headingChartData = Object.entries(headingsByLevel).map(([level, count]) => ({
+        level,
+        count,
+      }));
+
+      // Calculate content density for different sections
+      const sections = ['header', 'main', 'footer'];
+      const contentDensity = sections.map(section => {
+        const sectionText = data.content.text.length;
+        const sectionElements = data.content.links.length + data.content.images.length;
+        return {
+          section,
+          density: sectionElements > 0 ? sectionText / sectionElements : 0,
+        };
+      });
+
+      set({
+        stats: {
+          wordCount: data.content.wordCount || 0,
+          linkCount: data.content.links.length,
+          imageCount: data.content.images.length,
+          headingCount: data.content.headings.length,
+          readingTime: data.content.readingTime || 0,
+          headingChartData,
+          linkTypes,
+          contentDensity,
+          seoScore: 0, // Will be updated by analyzeSEO
+          performance: data.performance || {
+            loadTime: 0,
+            resourceCount: 0,
+            totalSize: 0,
+          },
+        },
+      });
+    },
+
+    analyzeSEO: (data) => {
+      const seoAnalysis = calculateSEOScore(data);
+      set((state) => {
+        state.seoAnalysis = seoAnalysis;
+        if (state.stats) {
+          state.stats.seoScore = seoAnalysis.score;
+        }
+      });
+    },
+  }))
+);
