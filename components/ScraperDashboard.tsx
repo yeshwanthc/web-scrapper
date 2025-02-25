@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Globe, Search, Database, Link2, BarChart2, Clock, Hash, FileText, AlertCircle, Video, Image, Type } from 'lucide-react';
+import { Globe, Search, Database, Link2, BarChart2, Clock, Hash, FileText, AlertCircle, Video, Image, Type, Download, Trash2 } from 'lucide-react';
 import {
   BarChart,
   Bar,
@@ -34,6 +34,7 @@ export default function ScraperDashboard() {
     loadSavedPages,
     setSearchTerm,
     setTimeframe,
+    deletePage,
   } = useScraperStore();
 
   useEffect(() => {
@@ -50,6 +51,30 @@ export default function ScraperDashboard() {
         return 'Last Month';
       default:
         return 'All Time';
+    }
+  };
+
+  const downloadImage = async (imageUrl: string, filename: string) => {
+    try {
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to download image:', error);
+    }
+  };
+
+  const downloadAllImages = async (images: { src: string; alt: string }[]) => {
+    for (const image of images) {
+      const filename = image.src.split('/').pop() || 'image.jpg';
+      await downloadImage(image.src, filename);
     }
   };
 
@@ -221,7 +246,19 @@ export default function ScraperDashboard() {
                 {scrapedData ? (
                   <div className="space-y-6">
                     <div>
-                      <h3 className="font-semibold mb-3">Images</h3>
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="font-semibold">Images</h3>
+                        {scrapedData.content.images.length > 0 && (
+                          <Button
+                            onClick={() => downloadAllImages(scrapedData.content.images)}
+                            variant="outline"
+                            size="sm"
+                          >
+                            <Download className="w-4 h-4 mr-2" />
+                            Download All Images
+                          </Button>
+                        )}
+                      </div>
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                         {scrapedData.content.images.map((image, i) => (
                           <div key={i} className="relative group">
@@ -235,6 +272,15 @@ export default function ScraperDashboard() {
                               {image.width && image.height && (
                                 <p className="text-xs opacity-75">{image.width}x{image.height}</p>
                               )}
+                              <Button
+                                onClick={() => downloadImage(image.src, image.src.split('/').pop() || 'image.jpg')}
+                                variant="ghost"
+                                size="sm"
+                                className="mt-1 w-full text-white hover:text-white hover:bg-white/20"
+                              >
+                                <Download className="w-4 h-4 mr-2" />
+                                Download
+                              </Button>
                             </div>
                           </div>
                         ))}
@@ -352,7 +398,29 @@ export default function ScraperDashboard() {
                     )
                     .map((page) => (
                       <Card key={page.id} className="p-4 hover:shadow-md transition-shadow">
-                        <h3 className="font-semibold truncate">{page.title}</h3>
+                        <div className="flex justify-between items-start mb-2">
+                          <h3 className="font-semibold truncate flex-1">{page.title}</h3>
+                          <div className="flex space-x-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setUrl(page.url);
+                                scrapeUrl();
+                              }}
+                            >
+                              <Globe className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => deletePage(page.id)}
+                              className="text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
                         <p className="text-sm text-muted-foreground truncate">{page.url}</p>
                         <div className="flex items-center space-x-2 mt-2 text-sm text-muted-foreground">
                           <Clock className="w-4 h-4" />

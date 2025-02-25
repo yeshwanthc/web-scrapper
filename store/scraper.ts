@@ -39,6 +39,7 @@ interface ScraperActions {
   setTimeframe: (timeframe: TimeFrame) => void;
   calculateStats: (data: ScrapedData) => void;
   analyzeSEO: (data: ScrapedData) => void;
+  deletePage: (id: string) => Promise<void>;
 }
 
 const calculateSEOScore = (data: ScrapedData): SeoAnalysis => {
@@ -215,10 +216,32 @@ export const useScraperStore = create<ScraperState & ScraperActions>()(
       }
 
       try {
-        const { data, error } = await supabase
+        let query = supabase
           .from('scraped_pages')
           .select('*')
           .order('scraped_at', { ascending: false });
+
+        const timeframe = get().selectedTimeframe;
+        if (timeframe !== 'all') {
+          const now = new Date();
+          let startDate = new Date();
+          
+          switch (timeframe) {
+            case 'day':
+              startDate.setDate(now.getDate() - 1);
+              break;
+            case 'week':
+              startDate.setDate(now.getDate() - 7);
+              break;
+            case 'month':
+              startDate.setMonth(now.getMonth() - 1);
+              break;
+          }
+          
+          query = query.gte('scraped_at', startDate.toISOString());
+        }
+
+        const { data, error } = await query;
 
         if (error) throw error;
         
@@ -228,9 +251,33 @@ export const useScraperStore = create<ScraperState & ScraperActions>()(
       }
     },
 
+    deletePage: async (id: string) => {
+      if (!supabase) {
+        set({ error: 'Supabase is not configured' });
+        return;
+      }
+
+      try {
+        const { error } = await supabase
+          .from('scraped_pages')
+          .delete()
+          .eq('id', id);
+
+        if (error) throw error;
+
+        // Refresh the list after deletion
+        await get().loadSavedPages();
+      } catch (error) {
+        set({ error: 'Failed to delete page' });
+      }
+    },
+
     setSearchTerm: (term) => set({ searchTerm: term }),
 
-    setTimeframe: (timeframe) => set({ selectedTimeframe: timeframe }),
+    setTimeframe: (timeframe) => {
+      set({ selectedTimeframe: timeframe });
+      get().loadSavedPages();
+    },
 
     calculateStats: (data) => {
       if (!data) return;
