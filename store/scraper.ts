@@ -9,7 +9,6 @@ const getSupabaseClient = () => {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-
   if (!supabaseUrl || !supabaseKey) {
     console.warn('Supabase environment variables are not set');
     return null;
@@ -50,6 +49,10 @@ const calculateSEOScore = (data: ScrapedData): SeoAnalysis => {
     images: { score: 0, message: '' },
     links: { score: 0, message: '' },
     meta: { score: 0, message: '' },
+    performance: { score: 0, message: '' },
+    readability: { score: 0, message: '' },
+    keywords: { score: 0, message: '' },
+    mobile: { score: 0, message: '' },
   };
 
   // Title analysis
@@ -117,11 +120,46 @@ const calculateSEOScore = (data: ScrapedData): SeoAnalysis => {
     checks.meta.message = 'Add more meta tags';
   }
 
-  const totalScore = Object.values(checks).reduce((acc, check) => acc + check.score, 0) / 6;
+  // Performance analysis
+  const performanceScore = Math.min(100, 100 - (data.performance.loadTime / 1000));
+  checks.performance.score = performanceScore;
+  checks.performance.message = performanceScore >= 90 
+    ? 'Performance is excellent' 
+    : 'Performance needs improvement';
+
+  // Readability analysis
+  const readabilityScore = data.contentAnalysis.readabilityScore;
+  checks.readability.score = readabilityScore;
+  checks.readability.message = readabilityScore >= 60 
+    ? 'Content is readable' 
+    : 'Improve content readability';
+
+  // Keywords analysis
+  const hasKeywords = data.contentAnalysis.topKeywords.length > 0;
+  checks.keywords.score = hasKeywords ? 100 : 50;
+  checks.keywords.message = hasKeywords 
+    ? 'Keywords are well distributed' 
+    : 'Add more relevant keywords';
+
+  // Mobile optimization
+  const isMobileOptimized = data.content.meta.viewport !== undefined;
+  checks.mobile.score = isMobileOptimized ? 100 : 50;
+  checks.mobile.message = isMobileOptimized 
+    ? 'Page is mobile-friendly' 
+    : 'Optimize for mobile devices';
+
+  // Calculate overall score
+  const totalScore = Object.values(checks).reduce((sum, check) => sum + check.score, 0) / Object.keys(checks).length;
+
+  // Generate recommendations
+  const recommendations = Object.entries(checks)
+    .filter(([_, check]) => check.score < 100)
+    .map(([category, check]) => check.message);
 
   return {
     score: Math.round(totalScore),
     checks,
+    recommendations,
   };
 };
 
@@ -199,7 +237,7 @@ export const useScraperStore = create<ScraperState & ScraperActions>()(
 
       const linkTypes = Object.entries(
         data.content.links.reduce((acc, link) => {
-          const type = link.type || 'other';
+          const type = link.isExternal ? 'external' : 'internal';
           acc[type] = (acc[type] || 0) + 1;
           return acc;
         }, {} as Record<string, number>)
@@ -215,9 +253,7 @@ export const useScraperStore = create<ScraperState & ScraperActions>()(
         count,
       }));
 
-      // Calculate content density for different sections
-      const sections = ['header', 'main', 'footer'];
-      const contentDensity = sections.map(section => {
+      const contentDensity = ['header', 'main', 'footer'].map(section => {
         const sectionText = data.content.fullText.length;
         const sectionElements = data.content.links.length + data.content.images.length;
         return {
@@ -236,12 +272,9 @@ export const useScraperStore = create<ScraperState & ScraperActions>()(
           headingChartData,
           linkTypes,
           contentDensity,
-          seoScore: 0, // Will be updated by analyzeSEO
-          performance: data.performance || {
-            loadTime: 0,
-            resourceCount: 0,
-            totalSize: 0,
-          },
+          seoScore: data.seoAnalysis.score,
+          performance: data.performance,
+          contentAnalysis: data.contentAnalysis,
         },
       });
     },

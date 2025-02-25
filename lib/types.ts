@@ -85,15 +85,57 @@ export const ContentSchema = z.object({
   }),
 });
 
+export const PerformanceMetricsSchema = z.object({
+  loadTime: z.number(),
+  resourceCount: z.number(),
+  totalSize: z.number(),
+  domNodes: z.number(),
+  scriptCount: z.number(),
+  styleCount: z.number(),
+  imageCount: z.number(),
+  fontCount: z.number(),
+});
+
+export const ContentAnalysisSchema = z.object({
+  keywordDensity: z.record(z.number()),
+  topKeywords: z.array(z.object({
+    keyword: z.string(),
+    count: z.number(),
+    density: z.number(),
+  })),
+  readabilityScore: z.number(),
+  sentenceCount: z.number(),
+  averageSentenceLength: z.number(),
+  paragraphCount: z.number(),
+  averageParagraphLength: z.number(),
+});
+
+export const SeoAnalysisSchema = z.object({
+  score: z.number(),
+  checks: z.object({
+    title: z.object({ score: z.number(), message: z.string() }),
+    description: z.object({ score: z.number(), message: z.string() }),
+    headings: z.object({ score: z.number(), message: z.string() }),
+    images: z.object({ score: z.number(), message: z.string() }),
+    links: z.object({ score: z.number(), message: z.string() }),
+    meta: z.object({ score: z.number(), message: z.string() }),
+    performance: z.object({ score: z.number(), message: z.string() }),
+    readability: z.object({ score: z.number(), message: z.string() }),
+    keywords: z.object({ score: z.number(), message: z.string() }),
+    mobile: z.object({ score: z.number(), message: z.string() }),
+  }),
+  recommendations: z.array(z.string()),
+});
+
 export const ScrapedDataSchema = z.object({
   url: z.string(),
   title: z.string(),
   description: z.string().optional(),
   content: ContentSchema,
-  performance: z.object({
-    loadTime: z.number(),
-    resourceCount: z.number(),
-    totalSize: z.number(),
+  performance: PerformanceMetricsSchema,
+  contentAnalysis: ContentAnalysisSchema,
+  seoAnalysis: SeoAnalysisSchema.extend({
+    score: z.number(),
   }),
 });
 
@@ -106,6 +148,9 @@ export type Paragraph = z.infer<typeof ParagraphSchema>;
 export type Video = z.infer<typeof VideoSchema>;
 export type Meta = z.infer<typeof MetaSchema>;
 export type Content = z.infer<typeof ContentSchema>;
+export type PerformanceMetrics = z.infer<typeof PerformanceMetricsSchema>;
+export type ContentAnalysis = z.infer<typeof ContentAnalysisSchema>;
+export type SeoAnalysis = z.infer<typeof SeoAnalysisSchema>;
 export type ScrapedData = z.infer<typeof ScrapedDataSchema>;
 
 export interface Stats {
@@ -118,23 +163,8 @@ export interface Stats {
   linkTypes: { type: string; count: number }[];
   contentDensity: { section: string; density: number }[];
   seoScore: number;
-  performance: {
-    loadTime: number;
-    resourceCount: number;
-    totalSize: number;
-  };
+  performance: PerformanceMetrics;
+  contentAnalysis: ContentAnalysis;
 }
 
 export type TimeFrame = 'all' | 'day' | 'week' | 'month';
-
-export interface SeoAnalysis {
-  score: number;
-  checks: {
-    title: { score: number; message: string };
-    description: { score: number; message: string };
-    headings: { score: number; message: string };
-    images: { score: number; message: string };
-    links: { score: number; message: string };
-    meta: { score: number; message: string };
-  };
-}
